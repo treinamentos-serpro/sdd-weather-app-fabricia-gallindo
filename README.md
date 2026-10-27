@@ -100,6 +100,25 @@ Decisões-chave:
 - **Rede isolada** em `services/` — componentes e hooks não conhecem URLs.
 - Sempre tratar **loading**, **erro** e **vazio**.
 
+### Dados mock para desenvolver a UI
+
+Os contratos de domínio estão em [src/types/weather.ts](src/types/weather.ts).
+Para desenvolver componentes sem consultar a API, importe o objeto tipado:
+
+```ts
+import { weatherDataMock } from './src/mocks/weather';
+```
+
+O caminho acima é relativo à raiz; ajuste-o à localização do arquivo consumidor.
+O [mock](src/mocks/weather.ts) contém dados fictícios de São Paulo, clima atual
+e cinco dias consecutivos, com datas fixas de 27 a 31/10/2026. Não acompanha o
+dia real nem representa uma consulta ao provedor. Temperaturas estão em Celsius,
+precipitação em mm e vento em km/h; nos contratos, valores indisponíveis usam
+`null`. A unidade de apresentação não altera os valores do domínio.
+
+Os campos seguem a proposta do plano para prototipação; as decisões de produto
+pendentes na especificação continuam abertas.
+
 ---
 
 ## Stack
