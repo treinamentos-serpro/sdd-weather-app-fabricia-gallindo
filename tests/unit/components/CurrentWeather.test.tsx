@@ -20,11 +20,7 @@ describe('CurrentWeather', () => {
       return (
         <>
           <UnitToggle unit={unit} onChange={setUnit} />
-          <CurrentWeather
-            city={city}
-            current={{ ...current, temperatureC: 0 }}
-            unit={unit}
-          />
+          <CurrentWeather city={city} current={{ ...current, temperatureC: 0 }} unit={unit} />
         </>
       );
     }
@@ -114,6 +110,30 @@ describe('CurrentWeather', () => {
     expect(screen.getByText('Sensação térmica: -2,4 °C')).toBeInTheDocument();
     expect(getMetric('Umidade')).toHaveTextContent('0 %');
     expect(getMetric('Vento')).toHaveTextContent('0 km/h');
+  });
+
+  it('marks non-finite numeric values unavailable instead of rendering NaN', () => {
+    render(
+      <CurrentWeather
+        city={city}
+        current={{
+          ...current,
+          temperatureC: Number.NaN,
+          apparentTemperatureC: Number.POSITIVE_INFINITY,
+          relativeHumidityPercent: Number.NaN,
+          windSpeedKmh: Number.NaN,
+          precipitationMm: Number.NaN,
+        }}
+        unit="celsius"
+      />,
+    );
+
+    expect(screen.getByText('Indisponível', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getByText('Sensação térmica: Indisponível')).toBeInTheDocument();
+    for (const label of ['Umidade', 'Vento', 'Precipitação']) {
+      expect(getMetric(label)).toHaveTextContent('Indisponível');
+    }
+    expect(screen.queryByText(/NaN|Infinity|undefined/)).not.toBeInTheDocument();
   });
 
   it('displays an explicit unknown condition and handles night icons', () => {

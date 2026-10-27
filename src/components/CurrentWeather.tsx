@@ -12,7 +12,9 @@ interface CurrentWeatherProps {
 const metricFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 
 function formatMetric(value: number | null, suffix: string): string {
-  return value === null ? 'Indisponível' : `${metricFormatter.format(value)} ${suffix}`;
+  return typeof value !== 'number' || !Number.isFinite(value)
+    ? 'Indisponível'
+    : `${metricFormatter.format(value)} ${suffix}`;
 }
 
 export default function CurrentWeather({ city, current, unit }: CurrentWeatherProps) {

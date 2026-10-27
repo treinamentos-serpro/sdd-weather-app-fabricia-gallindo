@@ -38,7 +38,7 @@ export function getWeatherCondition(
   code: number | null,
   isDay: boolean | null = null,
 ): WeatherCondition {
-  if (code === null) {
+  if (typeof code !== 'number' || !Number.isFinite(code)) {
     return { label: 'Condição indisponível', icon: '❔' };
   }
 

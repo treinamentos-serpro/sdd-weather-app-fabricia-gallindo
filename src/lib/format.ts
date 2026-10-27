@@ -13,14 +13,18 @@ const temperatureFormatter = new Intl.NumberFormat('pt-BR', {
 });
 const probabilityFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 
-export function formatDayLabel(date: string): string {
+export function formatDayLabel(date: string | null | undefined): string {
+  if (typeof date !== 'string') {
+    return '—';
+  }
+
   const parsedDate = new Date(`${date}T00:00:00Z`);
   if (
     !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
     Number.isNaN(parsedDate.getTime()) ||
     parsedDate.toISOString().slice(0, 10) !== date
   ) {
-    throw new RangeError(`Data de previsão inválida: ${date}`);
+    return '—';
   }
 
   // A data já pertence à cidade; UTC evita reinterpretá-la no fuso do navegador.
@@ -28,7 +32,7 @@ export function formatDayLabel(date: string): string {
 }
 
 export function formatTemperature(value: number | null, unit: Unit): string {
-  if (value === null) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     return 'Indisponível';
   }
 
@@ -37,5 +41,7 @@ export function formatTemperature(value: number | null, unit: Unit): string {
 }
 
 export function formatPrecipitationProbability(value: number | null): string {
-  return value === null ? 'Indisponível' : `${probabilityFormatter.format(value)} %`;
+  return typeof value !== 'number' || !Number.isFinite(value)
+    ? 'Indisponível'
+    : `${probabilityFormatter.format(value)} %`;
 }

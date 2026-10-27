@@ -32,7 +32,9 @@ test('search, forecast, unit conversion and retry work at 320px with intercepted
     { times: 1 },
   );
   await searchCity(page, 'São Paulo');
-  await expect(page.getByRole('alert')).toContainText('HTTP 503');
+  await expect(page.getByRole('alert')).toContainText(
+    'O serviço está temporariamente indisponível. Tente novamente.',
+  );
   const beforeRetry = apiRequests.length;
   await page.getByRole('button', { name: 'Tentar novamente' }).click();
   await expect(page.getByText('77,7 °F')).toBeVisible();

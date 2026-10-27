@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getWeather, searchCities } from '../services/weatherService';
+import { getWeather, searchCities, WeatherServiceError } from '../services/weatherService';
 import type { City, WeatherData } from '../types/weather';
 
 export type WeatherStatus = 'idle' | 'loading' | 'success' | 'error' | 'empty';
@@ -78,7 +78,10 @@ export function useWeather() {
       setState((previous) => ({
         ...previous,
         status: 'error',
-        error: error instanceof Error ? error.message : 'Não foi possível consultar o clima.',
+        error:
+          error instanceof WeatherServiceError
+            ? error.message
+            : 'Não foi possível consultar os dados do tempo. Tente novamente.',
       }));
     }
   }, []);

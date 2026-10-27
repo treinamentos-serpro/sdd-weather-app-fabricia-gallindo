@@ -49,7 +49,8 @@ describe('fetchWithTimeout', () => {
     const request = fetchWithTimeout('https://example.test');
     const rejection = expect(request).rejects.toMatchObject({
       name: 'WeatherServiceError',
-      message: 'A requisição demorou demais.',
+      message:
+        'A solicitação excedeu o limite de 10 segundos. Verifique sua conexão e tente novamente.',
       status: undefined,
     });
 
@@ -63,8 +64,14 @@ describe('fetchWithTimeout', () => {
   });
 
   it.each([
-    [new DOMException('Aborted', 'AbortError'), 'A requisição demorou demais.'],
-    [new TypeError('Failed to fetch'), 'Falha de rede.'],
+    [
+      new DOMException('Aborted', 'AbortError'),
+      'A solicitação excedeu o limite de 10 segundos. Verifique sua conexão e tente novamente.',
+    ],
+    [
+      new TypeError('Failed to fetch'),
+      'Não foi possível conectar ao serviço. Verifique sua conexão com a internet e tente novamente.',
+    ],
   ])('converts %s to WeatherServiceError and clears the timer', async (error, message) => {
     vi.useFakeTimers();
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(error));
@@ -86,6 +93,41 @@ describe('fetchWithTimeout', () => {
 
     await expect(fetchWithTimeout('https://example.test')).rejects.toBe(error);
     expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('keeps the timeout active while reading the response body', async () => {
+    vi.useFakeTimers();
+    let requestSignal: AbortSignal | null | undefined;
+    const response = new Response('{}');
+    vi.spyOn(response, 'json').mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          requestSignal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          );
+        }),
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, { signal }: RequestInit) => {
+        requestSignal = signal;
+        return Promise.resolve(response);
+      }),
+    );
+
+    const request = searchCities('São Paulo');
+    const rejection = expect(request).rejects.toMatchObject({
+      name: 'WeatherServiceError',
+      message:
+        'A solicitação excedeu o limite de 10 segundos. Verifique sua conexão e tente novamente.',
+    });
+
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(requestSignal?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await rejection;
+    expect(requestSignal?.aborted).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
   });
 });
@@ -236,7 +278,7 @@ describe('getWeather', () => {
     expect((await getWeather(city)).forecast.map((day) => day.date)).toEqual(dates);
   });
 
-  it('maps null precipitation values to zero for current and daily weather', async () => {
+  it('keeps missing precipitation unavailable while preserving actual zeroes', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -251,8 +293,8 @@ describe('getWeather', () => {
 
     const weather = await getWeather(city);
 
-    expect(weather.current.precipitationMm).toBe(0);
-    expect(weather.forecast.map((day) => day.precipitationMm)).toEqual([0, 1, 0, 3, 0]);
+    expect(weather.current.precipitationMm).toBeNull();
+    expect(weather.forecast.map((day) => day.precipitationMm)).toEqual([null, 1, null, 3, null]);
   });
 
   it('preserves five dates and available values when daily measurement arrays are partial', async () => {
@@ -283,20 +325,101 @@ describe('getWeather', () => {
     expect(weather.forecast.map((day) => day.date)).toEqual(dates);
     expect(weather.forecast.map((day) => day.weatherCode)).toEqual([0, null, 61, null, null]);
     expect(weather.forecast.map((day) => day.temperatureMinC)).toEqual([
-      -2.35, null, 0, null, null,
+      -2.35,
+      null,
+      0,
+      null,
+      null,
     ]);
     expect(weather.forecast.map((day) => day.temperatureMaxC)).toEqual([
-      0, 12.25, null, null, null,
+      0,
+      12.25,
+      null,
+      null,
+      null,
     ]);
     expect(weather.forecast.map((day) => day.precipitationProbabilityPercent)).toEqual([
-      0, null, 100, null, null,
+      0,
+      null,
+      100,
+      null,
+      null,
     ]);
-    expect(weather.forecast.map((day) => day.precipitationMm)).toEqual([
-      0, 1.5, null, null, null,
+    expect(weather.forecast.map((day) => day.precipitationMm)).toEqual([0, 1.5, null, null, null]);
+    expect(weather.forecast.map((day) => day.windSpeedMaxKmh)).toEqual([0, null, null, null, null]);
+  });
+
+  it('normalizes non-finite and non-numeric measurements to null', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            current: {
+              ...current,
+              temperature_2m: 'NaN',
+              apparent_temperature: Number.POSITIVE_INFINITY,
+              relative_humidity_2m: false,
+              weather_code: '3',
+              precipitation: null,
+            },
+            daily: {
+              time: dates,
+              temperature_2m_min: [Number.NaN, 0],
+              temperature_2m_max: [0],
+              precipitation_probability_max: [null, 100],
+              precipitation_sum: [0],
+              wind_speed_10m_max: ['12'],
+            },
+          }),
+        ),
+      ),
+    );
+
+    const weather = await getWeather(city);
+
+    expect(weather.current).toMatchObject({
+      temperatureC: null,
+      apparentTemperatureC: null,
+      relativeHumidityPercent: null,
+      weatherCode: null,
+      precipitationMm: null,
+    });
+    expect(weather.forecast.map((day) => day.temperatureMinC)).toEqual([null, 0, null, null, null]);
+    expect(weather.forecast.map((day) => day.temperatureMaxC)).toEqual([0, null, null, null, null]);
+    expect(weather.forecast.map((day) => day.precipitationProbabilityPercent)).toEqual([
+      null,
+      100,
+      null,
+      null,
+      null,
     ]);
+    expect(weather.forecast.map((day) => day.precipitationMm)).toEqual([0, null, null, null, null]);
     expect(weather.forecast.map((day) => day.windSpeedMaxKmh)).toEqual([
-      0, null, null, null, null,
+      null,
+      null,
+      null,
+      null,
+      null,
     ]);
+  });
+
+  it('rejects forecast dates that are missing or invalid', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ current, daily: { ...daily, time: [...dates.slice(0, 4), null] } }),
+          ),
+        ),
+    );
+
+    await expect(getWeather(city)).rejects.toMatchObject({
+      name: 'WeatherServiceError',
+      message: 'O serviço não retornou todos os dados necessários. Tente novamente.',
+    });
   });
 
   it.each([
@@ -320,7 +443,9 @@ describe('getWeather', () => {
     const request = getWeather(city);
 
     await expect(request).rejects.toBeInstanceOf(WeatherServiceError);
-    await expect(request).rejects.toThrow('Resposta meteorológica incompleta.');
+    await expect(request).rejects.toThrow(
+      'O serviço não retornou todos os dados necessários. Tente novamente.',
+    );
   });
 
   it.each([400, 429, 500])('rejects HTTP %s before parsing the response', async (status) => {
@@ -329,12 +454,24 @@ describe('getWeather', () => {
     const request = getWeather(city);
 
     await expect(request).rejects.toBeInstanceOf(WeatherServiceError);
-    await expect(request).rejects.toMatchObject({ status });
+    const expectedMessage =
+      status === 429
+        ? 'O serviço está recebendo muitas solicitações. Aguarde um pouco e tente novamente.'
+        : status >= 500
+          ? 'O serviço está temporariamente indisponível. Tente novamente.'
+          : 'Não foi possível consultar o clima. Tente novamente.';
+    await expect(request).rejects.toMatchObject({ status, message: expectedMessage });
   });
 
   it.each([
-    [new TypeError('Failed to fetch'), 'Falha de rede.'],
-    [new DOMException('Aborted', 'AbortError'), 'A requisição demorou demais.'],
+    [
+      new TypeError('Failed to fetch'),
+      'Não foi possível conectar ao serviço. Verifique sua conexão com a internet e tente novamente.',
+    ],
+    [
+      new DOMException('Aborted', 'AbortError'),
+      'A solicitação excedeu o limite de 10 segundos. Verifique sua conexão e tente novamente.',
+    ],
   ])('normalizes transport errors: %s', async (error, message) => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(error));
 
@@ -343,18 +480,24 @@ describe('getWeather', () => {
     await expect(request).rejects.toThrow(message);
   });
 
-  it('rejects invalid JSON', async () => {
+  it('returns a friendly error for invalid JSON', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not json')));
 
-    await expect(getWeather(city)).rejects.toBeInstanceOf(SyntaxError);
+    await expect(getWeather(city)).rejects.toMatchObject({
+      name: 'WeatherServiceError',
+      message: 'O serviço retornou uma resposta inválida. Tente novamente.',
+    });
   });
 });
 
 describe('searchCities', () => {
-  it('rejects invalid JSON instead of presenting it as an empty search', async () => {
+  it('returns a friendly error for invalid JSON instead of presenting an empty search', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not json')));
 
-    await expect(searchCities('São Paulo')).rejects.toBeInstanceOf(SyntaxError);
+    await expect(searchCities('São Paulo')).rejects.toMatchObject({
+      name: 'WeatherServiceError',
+      message: 'O serviço retornou uma resposta inválida. Tente novamente.',
+    });
   });
 
   it.each(['', '   ', '\t\n'])('returns no cities without fetching for %j', async (name) => {
@@ -426,22 +569,51 @@ describe('searchCities', () => {
     await expect(searchCities('Inexistente')).resolves.toEqual([]);
   });
 
-  it.each([400, 429, 500])('throws WeatherServiceError for HTTP %s', async (status) => {
+  it.each([
+    { id: null, name: 'São Paulo', latitude: -23.55, longitude: -46.63 },
+    { id: 1, name: '', latitude: -23.55, longitude: -46.63 },
+    { id: 1, name: 'São Paulo', latitude: null, longitude: -46.63 },
+    { id: 1, name: 'São Paulo', latitude: -23.55, longitude: 'NaN' },
+  ])('rejects city results without valid identity and coordinates: %j', async (result) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ results: [result] }))),
+    );
+
+    await expect(searchCities('São Paulo')).rejects.toMatchObject({
+      name: 'WeatherServiceError',
+      message: 'O serviço retornou dados inválidos. Tente novamente.',
+    });
+  });
+
+  it.each([400, 429, 500])('throws a friendly WeatherServiceError for HTTP %s', async (status) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not json', { status })));
 
     const request = searchCities('São Paulo');
 
     await expect(request).rejects.toBeInstanceOf(WeatherServiceError);
+    const expectedMessage =
+      status === 429
+        ? 'O serviço está recebendo muitas solicitações. Aguarde um pouco e tente novamente.'
+        : status >= 500
+          ? 'O serviço está temporariamente indisponível. Tente novamente.'
+          : 'Não foi possível buscar cidades. Tente novamente.';
     await expect(request).rejects.toMatchObject({
       name: 'WeatherServiceError',
       status,
-      message: `Não foi possível buscar cidades (HTTP ${status}).`,
+      message: expectedMessage,
     });
   });
 
   it.each([
-    [new TypeError('Failed to fetch'), 'Falha de rede.'],
-    [new DOMException('Aborted', 'AbortError'), 'A requisição demorou demais.'],
+    [
+      new TypeError('Failed to fetch'),
+      'Não foi possível conectar ao serviço. Verifique sua conexão com a internet e tente novamente.',
+    ],
+    [
+      new DOMException('Aborted', 'AbortError'),
+      'A solicitação excedeu o limite de 10 segundos. Verifique sua conexão e tente novamente.',
+    ],
   ])('normalizes transport errors instead of returning an empty result: %s', async (error, message) => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(error));
 

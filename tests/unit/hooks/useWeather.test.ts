@@ -155,7 +155,7 @@ describe('useWeather', () => {
     expect(result.current).toMatchObject({
       status: 'error',
       data: weatherDataMock,
-      error: 'Serviço indisponível',
+      error: 'Não foi possível consultar os dados do tempo. Tente novamente.',
     });
     vi.mocked(getWeather).mockResolvedValueOnce(otherWeather);
     await act(() => result.current.retry());
@@ -241,7 +241,7 @@ describe('useWeather', () => {
 
     expect(result.current).toMatchObject({
       status: 'error',
-      error: 'Não foi possível consultar o clima.',
+      error: 'Não foi possível consultar os dados do tempo. Tente novamente.',
     });
   });
 });

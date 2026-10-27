@@ -26,8 +26,12 @@ describe('formatDayLabel', () => {
     '2026-04-31',
     '2026-13-01',
     '2026-1-01',
-  ])('explicitly rejects an invalid calendar date: %j', (date) => {
-    expect(() => formatDayLabel(date)).toThrow(RangeError);
+  ])('uses a safe fallback for an invalid calendar date: %j', (date) => {
+    expect(formatDayLabel(date)).toBe('—');
+  });
+
+  it.each([null, undefined])('uses a safe fallback for an absent date: %s', (date) => {
+    expect(formatDayLabel(date)).toBe('—');
   });
 });
 
@@ -38,6 +42,8 @@ describe('formatTemperature', () => {
     [25.4, 'fahrenheit', '77,7 °F'],
     [-2.35, 'celsius', '-2,4 °C'],
     [null, 'fahrenheit', 'Indisponível'],
+    [Number.NaN, 'celsius', 'Indisponível'],
+    [Number.POSITIVE_INFINITY, 'fahrenheit', 'Indisponível'],
   ] as const)('formats %s in %s as %s', (value, unit, expected) => {
     expect(formatTemperature(value, unit)).toBe(expected);
   });
@@ -49,6 +55,7 @@ describe('formatPrecipitationProbability', () => {
     [100, '100 %'],
     [25.5, '25,5 %'],
     [null, 'Indisponível'],
+    [Number.NaN, 'Indisponível'],
   ] as const)('formats %s as %s', (value, expected) => {
     expect(formatPrecipitationProbability(value)).toBe(expected);
   });

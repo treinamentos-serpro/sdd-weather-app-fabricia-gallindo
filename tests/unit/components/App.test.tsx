@@ -72,6 +72,25 @@ describe('App with useWeather', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
+  it.each([
+    '',
+    '   ',
+  ])('keeps the previous city and skips geocoding when searching with %j', async (query) => {
+    render(<App />);
+    await submit('Recife');
+    expect(await screen.findByRole('heading', { name: 'Recife' })).toBeVisible();
+    const searchesBeforeValidation = vi.mocked(searchCities).mock.calls.length;
+    const weatherRequestsBeforeValidation = vi.mocked(getWeather).mock.calls.length;
+
+    await submit(query);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Informe o nome de uma cidade.');
+    expect(screen.getByRole('heading', { name: 'Recife' })).toBeVisible();
+    expect(screen.getByRole('searchbox', { name: 'Cidade' })).toHaveFocus();
+    expect(searchCities).toHaveBeenCalledTimes(searchesBeforeValidation);
+    expect(getWeather).toHaveBeenCalledTimes(weatherRequestsBeforeValidation);
+  });
+
   it('renders loading with disabled search, then empty without requesting weather', async () => {
     let resolve!: (cities: []) => void;
     vi.mocked(searchCities).mockReturnValueOnce(
@@ -123,7 +142,9 @@ describe('App with useWeather', () => {
 
     vi.mocked(getWeather).mockRejectedValueOnce(new Error('Serviço indisponível'));
     await submit();
-    expect(await screen.findByRole('alert')).toHaveTextContent('Serviço indisponível');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Não foi possível consultar os dados do tempo. Tente novamente.',
+    );
     await user.click(screen.getByRole('button', { name: 'Tentar novamente' }));
     expect(await screen.findByText('25,4 °C')).toBeVisible();
     expect(weather).toEqual(original);

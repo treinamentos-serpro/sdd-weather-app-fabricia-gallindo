@@ -63,7 +63,11 @@ export default function App() {
         {status === 'empty' && (
           <EmptyState
             title="Nenhuma cidade encontrada"
-            hint="Confira a grafia ou tente buscar outra cidade."
+            hint={
+              data
+                ? `A última consulta continua sendo para ${data.city.name}. Confira a grafia ou tente buscar outra cidade.`
+                : 'Confira a grafia ou tente buscar outra cidade.'
+            }
           />
         )}
         {status === 'error' && error && <ErrorState message={error} onRetry={retry} />}
