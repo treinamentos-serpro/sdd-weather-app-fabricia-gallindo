@@ -25,6 +25,9 @@ describe('weatherDataMock', () => {
     for (const day of weatherDataMock.forecast) {
       expect(day.temperatureMinC).toBeTypeOf('number');
       expect(day.temperatureMaxC).toBeTypeOf('number');
+      if (day.temperatureMinC === null || day.temperatureMaxC === null) {
+        throw new Error(`O mock deve fornecer temperaturas para ${day.date}.`);
+      }
       expect(day.temperatureMinC).toBeLessThanOrEqual(day.temperatureMaxC);
       expect(day.precipitationProbabilityPercent).toBeGreaterThanOrEqual(0);
       expect(day.precipitationProbabilityPercent).toBeLessThanOrEqual(100);

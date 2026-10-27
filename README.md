@@ -100,6 +100,107 @@ Decisões-chave:
 - **Rede isolada** em `services/` — componentes e hooks não conhecem URLs.
 - Sempre tratar **loading**, **erro** e **vazio**.
 
+### Demonstração offline
+
+A composição em [src/App.tsx](src/App.tsx) conecta busca, unidade, hero, previsão
+e estados sem API. O header reúne a marca, SearchBar e UnitToggle. O seletor
+“Cenário de demonstração” permite visualizar idle/loading/empty/error/success;
+a tela inicia em idle. Uma busca válida ou “Tentar novamente” exibe o mock de
+São Paulo, independentemente do nome digitado, com aviso explícito de dados
+fictícios e datas fixas. Loading permanece até escolher outro cenário.
+
+A unidade começa em Celsius e é mantida ao alternar cenários. A conversão ocorre
+somente na renderização, sem modificar o mock nem chamar a rede.
+[src/app/App.tsx](src/app/App.tsx) mantém compatibilidade com imports anteriores.
+O seletor pertence ao protótipo; o fluxo real via hooks/services ainda está pendente.
+
+### Busca de cidade
+
+O [SearchBar](src/components/SearchBar.tsx) recebe `onSearch(city: string)` e
+`disabled` (opcional, `false` por padrão). O callback é chamado ao enviar o
+formulário por botão ou Enter, com espaços externos removidos; uma entrada vazia
+exibe validação sem disparar busca. `disabled` desabilita o input e o botão e
+bloqueia o envio.
+
+O componente reutiliza o formulário de [CitySearch](src/components/CitySearch.tsx),
+preservando sua API de loading, com label acessível, landmark `search` e estilo
+glassmorphism. Não consulta a API.
+
+### Acessibilidade e responsividade do protótipo
+
+Revisão e correções de 27/10/2026:
+
+- Texto dos botões de destaque usa `night-900`: contraste de 5,39:1 sobre
+  `accent-500` (antes, branco atingia apenas 3,51:1). Placeholder usa `slate-400`,
+  com 6,99:1 sobre `night-800`. Bordas de controles também têm contraste testado.
+- Link “Pular para o conteúdo”, foco visível, retorno ao input após busca vazia
+  e foco no resultado após busca/retry. O seletor de cenário mantém seu foco.
+- O formulário possui nome acessível e associa erro ao campo; editar a consulta
+  remove a indicação anterior de erro.
+- Textos longos e valores indisponíveis quebram linha sem ocultar conteúdo;
+  o hero reduz o tamanho de “Indisponível”, mantendo temperaturas em destaque.
+- [Testes no navegador](tests/e2e/accessibility.spec.ts) cobrem os cinco cenários
+  em 320, 375, 640, 768, 1024 e 1440 px, colunas da previsão, teclado,
+  contraste normal/hover dos controles, campos nulos, nomes longos,
+  alvos de toque de pelo menos 44 px e redução de movimento.
+
+Essas verificações não certificam conformidade WCAG. Permanecem recomendados:
+teste manual dos anúncios com NVDA/VoiceOver, zoom/texto ampliado e modo de alto
+contraste, além de execução em Firefox e Safari reais. Os testes Chromium
+bloqueiam fontes externas e verificam a fonte fallback; revalidar com Inter
+carregada na revisão visual de produção.
+
+### Seletor de unidade
+
+O [UnitToggle](src/components/UnitToggle.tsx) recebe `unit` (`'celsius'` ou
+`'fahrenheit'`) e `onChange(unit)`. É um componente controlado: o consumidor
+atualiza `unit` ao receber o callback. Os botões °C/°F expõem a seleção por
+`aria-pressed` dentro do grupo “Unidade de temperatura”. Use Tab/Shift+Tab para
+navegar e Enter ou Espaço para ativar. O controle não converte temperaturas nem
+faz requisições.
+
+### Clima atual
+
+O [CurrentWeather](src/components/CurrentWeather.tsx) recebe `city`, `current`
+e `unit`. Exibe temperatura e sensação térmica com uma casa decimal em pt-BR,
+condição/ícone WMO de [weatherCodes](src/lib/weatherCodes.ts), umidade, vento e
+precipitação. Valores nulos aparecem como “Indisponível”. Pressão também aparece
+como “Indisponível”, por decisão de manter o contrato atual sem esse campo.
+O componente não consulta a API e pode receber os dados do mock abaixo.
+
+### Previsão diária
+
+[ForecastList](src/components/ForecastList.tsx) recebe `forecast` e `unit` e
+renderiza os dias na ordem fornecida, em grid responsivo de 2/3/5 colunas.
+[ForecastCard](src/components/ForecastCard.tsx) também pode ser usado isoladamente
+com `day` e `unit`. Cada card apresenta dia da semana e data em pt-BR, condição,
+ícone, máxima/mínima e probabilidade de chuva. Valores ausentes são indicados como
+“Indisponível”; uma lista vazia comunica que não há previsão.
+
+```tsx
+<ForecastList forecast={weatherDataMock.forecast} unit="celsius" />
+```
+
+Os helpers em [format.ts](src/lib/format.ts) preservam a data da cidade sem
+reinterpretá-la no fuso do navegador e compartilham a formatação de temperaturas
+com o hero.
+
+### Estados de apresentação
+
+Os componentes em [states/](src/components/states/) são independentes da rede:
+
+- [LoadingState](src/components/states/LoadingState.tsx): `role="status"`, texto
+  padrão de carregamento e prop `message` opcional. A animação respeita redução
+  de movimento.
+- [ErrorState](src/components/states/ErrorState.tsx): recebe `message` e `onRetry`;
+  anuncia a mensagem com `role="alert"` e oferece “Tentar novamente”, acessível
+  por teclado, sem retry automático.
+- [EmptyState](src/components/states/EmptyState.tsx): título e dica iniciais;
+  aceita `title` e `hint` para contextos como busca sem resultados.
+
+O consumidor deve montar apenas o estado correspondente à requisição e remover
+o loading quando ela terminar.
+
 ### Dados mock para desenvolver a UI
 
 Os contratos de domínio estão em [src/types/weather.ts](src/types/weather.ts).

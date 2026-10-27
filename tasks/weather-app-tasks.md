@@ -268,6 +268,7 @@ Derivado de [plans/weather-app-plan.md](../plans/weather-app-plan.md) e rastread
 ### T-17 — Apresentar estados de requisição
 
 - **Descrição:** Criar um componente reutilizável para estados de carregamento, vazio, erro e retry.
+- **Implementação de apresentação:** componentes independentes em `src/components/states/`: `LoadingState` (mensagem opcional), `ErrorState` (`message`, `onRetry`) e `EmptyState` (título e dica opcionais). O consumidor renderiza somente o estado correspondente; não há retry automático.
 - **Critérios de aceite:**
   - Props loading, empty e error renderizam mensagens distintas em pt-BR; empty não usa texto de erro.
   - Loading/error têm role/aria apropriado para anúncio e o loading deixa de ser marcado quando a requisição termina.
@@ -286,6 +287,7 @@ Derivado de [plans/weather-app-plan.md](../plans/weather-app-plan.md) e rastread
   - O heading identifica a cidade selecionada e cada campo aprovado tem label/unidade visível.
   - Fixture com campo nulo renderiza o marcador de indisponibilidade, não `0` nem valor de outra fixture.
   - Temperatura renderiza conversão e sufixo da unidade recebida; descrição/data usam os formatadores fornecidos.
+  - O hero recebe `city`, `current` e `unit`, usa ícones/descrições de `lib/weatherCodes` e exibe umidade, vento, precipitação e pressão. Conforme decisão do usuário em 27/10/2026, pressão é “Indisponível” sem alterar o contrato; temperaturas usam uma casa decimal em pt-BR.
 - **Rastreabilidade:** RF-02, RF-04, RF-07; AC-08, AC-09, AC-14, AC-21, AC-22; RNF-05.
 - **Dependências:** T-05, T-09, T-10.
 - **Arquivos prováveis:** `src/components/CurrentWeather.tsx`
@@ -300,9 +302,10 @@ Derivado de [plans/weather-app-plan.md](../plans/weather-app-plan.md) e rastread
   - Fixture com cinco datas resulta em exatamente cinco itens na mesma ordem cronológica.
   - Fixture parcial mantém a data de cada item e renderiza marcador de indisponibilidade para cada valor ausente.
   - Temperaturas mostram conversão e rótulo da unidade selecionada; data/condição usam os formatadores.
+  - `ForecastList` recebe `forecast` e `unit`; `ForecastCard` recebe `day` e `unit`. O grid usa `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5`, com rótulos de dia de `lib/format`, ícone WMO e probabilidade de chuva. Lista vazia comunica ausência de previsão.
 - **Rastreabilidade:** RF-03, RF-04, RF-07; AC-10 a AC-14, AC-22; RNF-05.
 - **Dependências:** T-05, T-09, T-10.
-- **Arquivos prováveis:** `src/components/ForecastList.tsx`
+- **Arquivos prováveis:** `src/components/ForecastList.tsx`, `src/components/ForecastCard.tsx`, `src/lib/format.ts`
 - **Tipo:** UI
 - **Prioridade:** P0
 - **Tamanho:** M
@@ -326,6 +329,10 @@ Derivado de [plans/weather-app-plan.md](../plans/weather-app-plan.md) e rastread
 ### T-21 — Integrar os fluxos na aplicação
 
 - **Descrição:** Conectar formulário existente, resultados, estados, clima, previsão, unidade e hook no shell da aplicação.
+- **Fatias:** o protótipo offline aprovado em 27/10/2026 compõe os componentes em
+  `src/App.tsx`, com cenário explícito inicialmente idle, busca/retry para success
+  e unidade local sem mutação do mock. A integração real via hook/services
+  permanece pendente; o protótipo não conclui os critérios de integração de API.
 - **Critérios de aceite:**
   - Renderização inicial mostra busca e estado vazio, sem cidade, dados meteorológicos ou anúncio de loading.
   - Busca/chamada de seleção, retry e troca de unidade invocam as ações do hook e exibem os respectivos estados/resultados.
@@ -594,6 +601,10 @@ Derivado de [plans/weather-app-plan.md](../plans/weather-app-plan.md) e rastread
 ### T-40 — Validar operação por teclado e acessibilidade
 
 - **Descrição:** Verificar por E2E que o fluxo principal pode ser operado somente por teclado.
+- **Revisão do protótipo offline:** cobrir skip link, foco no input após validação,
+  foco nos resultados após busca/retry, contraste mínimo 4,5:1 para texto e
+  3:1 para limites de controles. Verificar os cinco cenários entre 320 e 1440 px,
+  inclusive nomes longos e campos nulos. Não equivale à validação manual com leitor de tela.
 - **Critérios de aceite:**
   - Teste E2E percorre busca, seleção, retry e mudança de unidade usando somente teclado; foco visível acompanha o controle ativo.
   - Testes localizam controles por roles/nomes acessíveis e verificam anúncio de loading e erro.

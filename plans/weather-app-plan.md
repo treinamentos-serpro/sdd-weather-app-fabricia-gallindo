@@ -95,7 +95,16 @@ tests/
 
 - `main.tsx`, `App.tsx`, `EmptyWeatherState.tsx`, `CitySearch.tsx`, `types/weather.ts` e `lib/temperature.ts` compõem a fundação já criada; integração e apresentação do clima ainda estão planejadas.
 - `App.tsx` compõe a experiência; cada componente visual fica em arquivo próprio.
+- O protótipo offline usa `src/App.tsx` como composição e `src/app/App.tsx`
+  reexporta essa entrada para compatibilidade. Estado local tipado controla os
+  cinco cenários e `unit` inicia em Celsius. O seletor de cenário é exclusivo
+  da demonstração explícita, sem rede, timers ou alteração do mock; busca e
+  retry levam a success com São Paulo. O fluxo real de hooks/services continua planejado.
 - `components/` não acessa API; `hooks/` não conhece o formato do payload externo.
+- Os componentes de apresentação em `components/states/` separam carregamento
+  (`LoadingState`, `role="status"`), erro recuperável (`ErrorState`, mensagem e
+  `onRetry`, `role="alert"`) e vazio (`EmptyState`, título e dica).
+  O consumidor controla a montagem de cada estado, sem timers ou retry automático.
 - `services/` não importa React e recebe `AbortSignal`; `lib/` não importa React nem executa I/O.
 - `types/weather.ts` contém contratos de domínio; `types/openMeteo.ts` contém somente os formatos externos necessários aos mapeadores.
 - Testes ficam em `tests/unit/components`, `hooks`, `services` e `lib`, seguindo o glob de `vite.config.ts`; E2E usa Playwright.
@@ -303,7 +312,19 @@ interface WeatherAppState {
 
 Busca e consulta meteorológica têm ciclos independentes, cada um com estados explícitos `idle`, `loading`, `success`, `empty` e `error`; `empty` é usado somente para geocoding sem resultados. `selectedCity` permanece separado para cumprir AC-03/AC-17 quando uma nova busca não encontra cidade ou a API falha. O hook usa `AbortController` e um identificador por solicitação para descartar respostas obsoletas (AC-06).
 
-A unidade é estado de apresentação, não dado persistido nem parâmetro de nova consulta. O domínio mantém todas as temperaturas em Celsius; na renderização, um seletor puro calcula Fahrenheit quando `unit === 'fahrenheit'` usando $F = C \times 9/5 + 32$. O componente aplica o arredondamento aprovado somente ao formatar o texto. Não armazenar uma cópia convertida nem alterar `WeatherData`; alternar unidade não chama services nem refaz request (AC-12 a AC-14).
+A unidade é estado de apresentação, não dado persistido nem parâmetro de nova consulta. O domínio mantém todas as temperaturas em Celsius; na renderização, um seletor puro calcula Fahrenheit quando `unit === 'fahrenheit'` usando $F = C \times 9/5 + 32$. Conforme a decisão 11 da spec, a apresentação usa `Intl.NumberFormat('pt-BR')` com exatamente uma casa decimal em ambas as unidades. Não armazenar uma cópia convertida nem alterar `WeatherData`; alternar unidade não chama services nem refaz request (AC-12 a AC-14).
+
+O hero `components/CurrentWeather.tsx` recebe `city`, `current` e `unit`, usa
+`lib/temperature.ts` e `lib/weatherCodes.ts` e apresenta umidade, vento e
+precipitação. Por decisão do usuário em 27/10/2026, pressão permanece fora do
+contrato e aparece como “Indisponível”, sem valor fictício ou inferido.
+
+`ForecastList` recebe `forecast` e `unit`, preserva a ordem dos dias fornecidos e
+renderiza `ForecastCard` (`day`, `unit`) em grid de duas/três/cinco colunas.
+`lib/format.ts` centraliza a apresentação de temperatura, probabilidade de chuva
+e rótulos de dia em pt-BR. Datas `YYYY-MM-DD` já normalizadas para a cidade são
+formatadas em UTC, sem deslocamento pelo fuso do navegador e sem inferir “hoje”.
+O rótulo inclui dia da semana e dia/mês; a decisão de fuso no adaptador continua aberta.
 
 ## Error Handling
 

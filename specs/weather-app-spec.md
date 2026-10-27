@@ -28,6 +28,13 @@ Aplicação web responsiva para consultar condições meteorológicas de cidades
 - O produto não exige autenticação nem persistência em servidor.
 - Uma busca sem resultados não substitui a cidade previamente selecionada; esse comportamento está coberto por AC-03.
 - Falhas não são recuperadas automaticamente; o usuário inicia uma nova tentativa pela ação “Tentar novamente”.
+- Para o hero de clima atual, pressão é apresentada como “Indisponível”, sem
+  adicionar esse campo ao contrato atual (decisão do usuário em 27/10/2026).
+- **Protótipo offline (aprovado pelo usuário em 27/10/2026):** a composição usa
+  um seletor explícito de cenários idle/loading/empty/error/success, iniciando em
+  idle. Buscar qualquer nome válido mostra somente o mock identificado como São
+  Paulo; retry mostra sucesso. O modo demonstrativo é visível, não simula uma
+  consulta real e não substitui os requisitos de integração com a API.
 
 ## Functional Requirements
 
@@ -207,6 +214,6 @@ As perguntas marcadas **Bloqueia produção** precisam de decisão e atualizaç�
 8. **Não bloqueia produção — Persistência local:** nesta versão, a unidade começa em Celsius quando não há preferência; não há compromisso de persistir unidade ou buscas entre sessões. Alterações requerem decisão de privacidade e retenção.
 9. **Bloqueia produção — Fuso horário:** definir o fuso que determina “hoje” para cada cidade consultada. Afeta AC-10, AC-11 e AC-22.
 10. **Não bloqueia produção — Cache:** a versão atual não promete cache nem exibição de dados anteriores após falha. Se cache for introduzido, definir validade e indicação de desatualização antes dessa mudança.
-11. **Bloqueia testes numéricos — Precisão:** definir casas decimais ou incremento de arredondamento para Celsius e Fahrenheit. Afeta AC-13.
+11. **Resolvida — Precisão:** aprovado pelo usuário em 27/10/2026: exibir uma casa decimal em Celsius e Fahrenheit, arredondando somente na apresentação com `Intl.NumberFormat('pt-BR')`. Preservar os valores canônicos em Celsius. Afeta AC-13.
 12. **Bloqueia produção — Timeout:** definir limite máximo para geocoding e consulta meteorológica. Afeta AC-19.
 13. **Bloqueia produção — Matriz de compatibilidade:** registrar versões mínimas e dispositivos/navegadores móveis suportados no ciclo de lançamento. Afeta AC-27 e RNF-08.
