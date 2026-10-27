@@ -100,19 +100,23 @@ Decisões-chave:
 - **Rede isolada** em `services/` — componentes e hooks não conhecem URLs.
 - Sempre tratar **loading**, **erro** e **vazio**.
 
-### Demonstração offline
+### Aplicação integrada
 
 A composição em [src/App.tsx](src/App.tsx) conecta busca, unidade, hero, previsão
-e estados sem API. O header reúne a marca, SearchBar e UnitToggle. O seletor
-“Cenário de demonstração” permite visualizar idle/loading/empty/error/success;
-a tela inicia em idle. Uma busca válida ou “Tentar novamente” exibe o mock de
-São Paulo, independentemente do nome digitado, com aviso explícito de dados
-fictícios e datas fixas. Loading permanece até escolher outro cenário.
+e estados ao [useWeather](src/hooks/useWeather.ts). O header reúne a marca,
+SearchBar e UnitToggle. A tela inicia em `idle`, sem chamadas de rede. Uma busca
+válida consulta o geocoding e carrega o clima da primeira cidade retornada.
 
-A unidade começa em Celsius e é mantida ao alternar cenários. A conversão ocorre
-somente na renderização, sem modificar o mock nem chamar a rede.
+A tela exibe LoadingState durante as consultas, EmptyState quando não há
+resultados, ErrorState com a mensagem do serviço e `retry` no botão “Tentar
+novamente”, ou CurrentWeather e ForecastList em `success`. A busca fica
+desabilitada durante loading. O resultado recebe foco após busca/retry com sucesso.
+O seletor de demonstração e o mock foram removidos do fluxo da aplicação.
+
+A unidade permanece no estado de UI do App, começa em Celsius e é mantida
+entre buscas e erros. A conversão ocorre somente na renderização, sem modificar
+os dados recebidos nem chamar a rede.
 [src/app/App.tsx](src/app/App.tsx) mantém compatibilidade com imports anteriores.
-O seletor pertence ao protótipo; o fluxo real via hooks/services ainda está pendente.
 
 ### Busca de cidade
 
@@ -126,7 +130,49 @@ O componente reutiliza o formulário de [CitySearch](src/components/CitySearch.t
 preservando sua API de loading, com label acessível, landmark `search` e estilo
 glassmorphism. Não consulta a API.
 
-### Acessibilidade e responsividade do protótipo
+O serviço [weatherService](src/services/weatherService.ts) exporta
+`searchCities(name): Promise<City[]>` para consultar o geocoding da Open-Meteo.
+Remove espaços externos, codifica o nome com `encodeURIComponent` e não chama a
+rede para entradas vazias. Resultados ausentes retornam `[]`; campos opcionais
+ausentes viram `null`, e `contextLabel` reúne região e país disponíveis.
+Respostas HTTP não-ok lançam `WeatherServiceError`, com o status HTTP; falhas de
+leitura do JSON são propagadas. O formulário usa o serviço por meio do hook.
+
+O mesmo serviço exporta `getWeather(city): Promise<WeatherData>` para consultar
+condições atuais e cinco dias (hoje e os quatro seguintes) na Forecast API.
+Solicita Celsius, km/h e mm, com `timezone=auto`; mapeia os arrays diários pelo
+mesmo índice, preserva medições indisponíveis como `null` e registra `fetchedAt`.
+Atualiza o fuso na cópia da cidade quando informado pelo provedor, sem alterar
+a cidade recebida. Respostas sem `current`, `daily`, horário atual ou cinco datas
+diárias lançam `WeatherServiceError`, assim como respostas HTTP não-ok.
+
+As duas consultas usam `fetchWithTimeout`, com `AbortController` e limite de
+10 segundos para receber a resposta HTTP. O timer é limpo no `finally`, tanto em
+sucesso quanto em erro. `AbortError` vira `WeatherServiceError` com a mensagem
+“A requisição demorou demais.”; falhas de rede (`TypeError` do `fetch`) viram
+“Falha de rede.”. Esses erros não têm status HTTP.
+
+### Hook de consulta
+
+O [useWeather](src/hooks/useWeather.ts) expõe `status`
+(`idle | loading | success | error | empty`), `data`, `cities`, `error` e `query`,
+além das ações assíncronas `search(name)`, `selectCity(city)` e `retry()`.
+Começa em `idle`, com dados/erro nulos, cidades vazias e consulta vazia.
+
+- `search` apara o nome, valida entradas vazias sem acessar os serviços e busca
+  cidades. Havendo resultados, consulta automaticamente o clima da primeira;
+  sem resultados, termina em `empty` sem chamar forecast.
+- `selectCity` consulta o clima da cidade informada sem repetir o geocoding.
+- `retry` repete a última consulta iniciada: geocoding com o mesmo nome ou,
+  depois de encontrar/selecionar uma cidade, forecast com a mesma cidade.
+  Antes de qualquer ação, não faz nada.
+
+Novas consultas entram em `loading` e limpam o erro anterior. Dados já carregados
+são preservados durante loading, erro e busca sem resultados. Erros são expostos
+como mensagens em `error`. Respostas obsoletas são descartadas após uma nova ação
+ou desmontagem, sem cancelar a requisição HTTP em andamento.
+
+### Acessibilidade e responsividade
 
 Revisão e correções de 27/10/2026:
 
@@ -134,7 +180,7 @@ Revisão e correções de 27/10/2026:
   `accent-500` (antes, branco atingia apenas 3,51:1). Placeholder usa `slate-400`,
   com 6,99:1 sobre `night-800`. Bordas de controles também têm contraste testado.
 - Link “Pular para o conteúdo”, foco visível, retorno ao input após busca vazia
-  e foco no resultado após busca/retry. O seletor de cenário mantém seu foco.
+  e foco no resultado após busca/retry com sucesso.
 - O formulário possui nome acessível e associa erro ao campo; editar a consulta
   remove a indicação anterior de erro.
 - Textos longos e valores indisponíveis quebram linha sem ocultar conteúdo;
@@ -143,6 +189,9 @@ Revisão e correções de 27/10/2026:
   em 320, 375, 640, 768, 1024 e 1440 px, colunas da previsão, teclado,
   contraste normal/hover dos controles, campos nulos, nomes longos,
   alvos de toque de pelo menos 44 px e redução de movimento.
+- [Fluxo integrado](tests/e2e/weather-flow.spec.ts) cobre busca, previsão, unidade
+  e retry em 320 px. Os testes interceptam geocoding/forecast com fixtures
+  determinísticas, sem acessar a API real.
 
 Essas verificações não certificam conformidade WCAG. Permanecem recomendados:
 teste manual dos anúncios com NVDA/VoiceOver, zoom/texto ampliado e modo de alto

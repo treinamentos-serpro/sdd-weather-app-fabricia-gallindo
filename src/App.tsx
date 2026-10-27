@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import CurrentWeather from './components/CurrentWeather';
 import ForecastList from './components/ForecastList';
 import SearchBar from './components/SearchBar';
@@ -6,34 +6,19 @@ import EmptyState from './components/states/EmptyState';
 import ErrorState from './components/states/ErrorState';
 import LoadingState from './components/states/LoadingState';
 import UnitToggle from './components/UnitToggle';
-import { weatherDataMock } from './mocks/weather';
+import useWeather from './hooks/useWeather';
 import type { Unit } from './types/weather';
-
-const scenarios = ['idle', 'loading', 'empty', 'error', 'success'] as const;
-type Scenario = (typeof scenarios)[number];
 
 export default function App() {
   const [unit, setUnit] = useState<Unit>('celsius');
-  const [scenario, setScenario] = useState<Scenario>('idle');
-  const scenarioId = useId();
+  const { status, data, error, search, retry } = useWeather();
   const resultRef = useRef<HTMLElement>(null);
-  const shouldFocusResult = useRef(false);
 
   useEffect(() => {
-    if (scenario === 'success' && shouldFocusResult.current) {
+    if (status === 'success') {
       resultRef.current?.focus();
-      shouldFocusResult.current = false;
     }
-  }, [scenario]);
-
-  function showResults() {
-    if (scenario === 'success') {
-      resultRef.current?.focus();
-    } else {
-      shouldFocusResult.current = true;
-      setScenario('success');
-    }
-  }
+  }, [status]);
 
   return (
     <div className="min-h-screen bg-night-900 text-slate-100">
@@ -52,7 +37,7 @@ export default function App() {
             </div>
             <UnitToggle unit={unit} onChange={setUnit} />
           </div>
-          <SearchBar disabled={scenario === 'loading'} onSearch={showResults} />
+          <SearchBar disabled={status === 'loading'} onSearch={search} />
         </div>
       </header>
 
@@ -68,71 +53,29 @@ export default function App() {
           </h1>
         </div>
 
-        <aside
-          aria-label="Controles da demonstração"
-          className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md"
-        >
-          <p className="font-semibold text-sun">Modo de demonstração — sem API</p>
-          <p className="mt-2 text-sm leading-6 text-slate-300">
-            Dados fictícios e fixos de São Paulo (27 a 31/10/2026). Qualquer busca válida exibe esse
-            exemplo, não uma consulta à cidade digitada. Tentar novamente também exibe o exemplo. No
-            cenário loading, use o seletor abaixo para continuar.
-          </p>
-          <label className="mb-2 mt-4 block text-sm font-medium" htmlFor={scenarioId}>
-            Cenário de demonstração
-          </label>
-          <select
-            className="min-h-12 w-full rounded-lg border border-slate-400 bg-night-800 px-3 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400 sm:w-auto"
-            id={scenarioId}
-            onChange={(event) => {
-              const selected = scenarios.find((value) => value === event.target.value);
-              if (selected === undefined) {
-                throw new Error('Cenário de demonstração inválido.');
-              }
-              setScenario(selected);
-            }}
-            value={scenario}
-          >
-            <option value="idle">idle — Aguardando busca</option>
-            <option value="loading">loading — Carregando</option>
-            <option value="empty">empty — Nenhum resultado</option>
-            <option value="error">error — Falha na consulta</option>
-            <option value="success">success — Clima e previsão</option>
-          </select>
-        </aside>
-
-        {scenario === 'idle' && (
+        {status === 'idle' && (
           <EmptyState
             title="Sua previsão começa por uma cidade."
-            hint="Busque pelo nome de uma cidade para visualizar o exemplo de clima e previsão."
+            hint="Busque pelo nome de uma cidade para visualizar o clima e a previsão."
           />
         )}
-        {scenario === 'loading' && <LoadingState />}
-        {scenario === 'empty' && (
+        {status === 'loading' && <LoadingState />}
+        {status === 'empty' && (
           <EmptyState
             title="Nenhuma cidade encontrada"
             hint="Confira a grafia ou tente buscar outra cidade."
           />
         )}
-        {scenario === 'error' && (
-          <ErrorState
-            message="Não foi possível consultar o tempo. Este é um erro de demonstração."
-            onRetry={showResults}
-          />
-        )}
-        {scenario === 'success' && (
+        {status === 'error' && error && <ErrorState message={error} onRetry={retry} />}
+        {status === 'success' && data && (
           <section
             aria-label="Resultado da consulta"
             className="space-y-8 rounded-3xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400"
             ref={resultRef}
             tabIndex={-1}
           >
-            <CurrentWeather
-              city={weatherDataMock.city}
-              current={weatherDataMock.current}
-              unit={unit}
-            />
-            <ForecastList forecast={weatherDataMock.forecast} unit={unit} />
+            <CurrentWeather city={data.city} current={data.current} unit={unit} />
+            <ForecastList forecast={data.forecast} unit={unit} />
           </section>
         )}
       </main>

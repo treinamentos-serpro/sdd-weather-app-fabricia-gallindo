@@ -1,14 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { weatherDataMock } from '../../src/mocks/weather';
+import { mockWeatherApi, searchCity } from './fixtures/weather';
 
 test.beforeEach(async ({ page }) => {
-  await page.route('**/*', async (route) => {
-    if (new URL(route.request().url()).origin !== 'http://localhost:5173') {
-      await route.abort();
-      return;
-    }
-    await route.continue();
-  });
+  await mockWeatherApi(page);
 });
 
 for (const width of [320, 375, 640, 768, 1024, 1440]) {
@@ -17,12 +12,21 @@ for (const width of [320, 375, 640, 768, 1024, 1440]) {
   }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/');
-    const selector = page.getByRole('combobox');
     for (const scenario of ['idle', 'loading', 'empty', 'error', 'success']) {
-      await selector.selectOption(scenario);
+      if (scenario !== 'idle') {
+        await searchCity(page, scenario);
+        if (scenario === 'loading') await expect(page.getByRole('status')).toBeVisible();
+        if (scenario === 'empty')
+          await expect(
+            page.getByRole('heading', { name: 'Nenhuma cidade encontrada' }),
+          ).toBeVisible();
+        if (scenario === 'error') await expect(page.getByRole('alert')).toBeVisible();
+        if (scenario === 'success') await expect(page.getByRole('listitem')).toHaveCount(5);
+      }
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         width,
       );
+      if (scenario === 'loading') await page.goto('/');
     }
     const columns = await page
       .getByRole('list')
@@ -39,33 +43,30 @@ for (const width of [320, 375, 640, 768, 1024, 1440]) {
 
 test('missing data and long labels fit at 320px without clipping', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 900 });
-  await page.route('**/src/mocks/weather.ts', async (route) => {
-    await route.fulfill({
-      contentType: 'application/javascript',
-      body: `export const weatherDataMock = ${JSON.stringify({
-        ...weatherDataMock,
-        city: {
-          ...weatherDataMock.city,
-          name: 'UmaCidadeComNomeMuitoLongoSemEspacosParaTestar',
-          contextLabel: 'UmaRegiaoAdministrativaMuitoLongaSemEspacos',
-        },
-        current: {
-          ...weatherDataMock.current,
-          temperatureC: null,
-          apparentTemperatureC: null,
-        },
-        forecast: weatherDataMock.forecast.map((day) => ({
-          ...day,
-          temperatureMaxC: null,
-          temperatureMinC: null,
-          precipitationProbabilityPercent: null,
-          weatherCode: 96,
-        })),
-      })};`,
-    });
+  await page.unroute('**/*');
+  await mockWeatherApi(page, {
+    ...weatherDataMock,
+    city: {
+      ...weatherDataMock.city,
+      name: 'UmaCidadeComNomeMuitoLongoSemEspacosParaTestar',
+      admin1: 'UmaRegiaoAdministrativaMuitoLongaSemEspacos',
+    },
+    current: {
+      ...weatherDataMock.current,
+      temperatureC: null,
+      apparentTemperatureC: null,
+    },
+    forecast: weatherDataMock.forecast.map((day) => ({
+      ...day,
+      temperatureMaxC: null,
+      temperatureMinC: null,
+      precipitationProbabilityPercent: null,
+      weatherCode: 96,
+    })),
   });
   await page.goto('/');
-  await page.getByRole('combobox').selectOption('success');
+  await searchCity(page, 'success');
+  await expect(page.getByRole('listitem')).toHaveCount(5);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
   const overflowingText = await page
     .locator('main p, main dd, main h2, main h3')
@@ -107,7 +108,13 @@ test('keyboard users can skip the header, correct validation and reach results a
   await page.keyboard.press('Enter');
   await expect(page.getByRole('region', { name: 'Resultado da consulta' })).toBeFocused();
 
-  await page.getByRole('combobox').selectOption('error');
+  await page.route(
+    'https://api.open-meteo.com/**',
+    (route) => route.fulfill({ status: 503, json: {} }),
+    { times: 1 },
+  );
+  await searchCity(page, 'Recife');
+  await expect(page.getByRole('alert')).toBeVisible();
   await page.getByRole('button', { name: 'Tentar novamente' }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('region', { name: 'Resultado da consulta' })).toBeFocused();
@@ -125,7 +132,8 @@ test('button labels, placeholder and control boundaries meet contrast thresholds
   page,
 }) => {
   await page.goto('/');
-  await page.getByRole('combobox').selectOption('error');
+  await searchCity(page, 'error');
+  await expect(page.getByRole('alert')).toBeVisible();
   for (const hovered of [false, true]) {
     for (const control of await page.locator('button, input, select').all()) {
       if (hovered) {
@@ -197,14 +205,15 @@ test('controls have comfortable touch targets and loading respects reduced motio
   await page.setViewportSize({ width: 320, height: 900 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
-  await page.getByRole('combobox').selectOption('error');
+  await searchCity(page, 'error');
+  await expect(page.getByRole('alert')).toBeVisible();
   for (const control of await page.locator('button, input, select').all()) {
     const box = await control.boundingBox();
     expect(box).not.toBeNull();
     expect(box?.height).toBeGreaterThanOrEqual(44);
     expect(box?.width).toBeGreaterThanOrEqual(44);
   }
-  await page.getByRole('combobox').selectOption('loading');
+  await searchCity(page, 'loading');
   await expect(page.getByRole('status')).toHaveText('Carregando dados do tempo...');
   expect(
     await page

@@ -331,8 +331,11 @@ Derivado de [plans/weather-app-plan.md](../plans/weather-app-plan.md) e rastread
 - **Descrição:** Conectar formulário existente, resultados, estados, clima, previsão, unidade e hook no shell da aplicação.
 - **Fatias:** o protótipo offline aprovado em 27/10/2026 compõe os componentes em
   `src/App.tsx`, com cenário explícito inicialmente idle, busca/retry para success
-  e unidade local sem mutação do mock. A integração real via hook/services
-  permanece pendente; o protótipo não conclui os critérios de integração de API.
+  e unidade local sem mutação do mock. A fatia seguinte conecta `useWeather` ao
+  App, remove os controles de demonstração, renderiza os cinco estados reais e
+  usa `retry` no ErrorState, mantendo unidade local de UI. A busca carrega
+  automaticamente a primeira cidade; seleção explícita/desambiguação permanece
+  fora desta fatia.
 - **Critérios de aceite:**
   - Renderização inicial mostra busca e estado vazio, sem cidade, dados meteorológicos ou anúncio de loading.
   - Busca/chamada de seleção, retry e troca de unidade invocam as ações do hook e exibem os respectivos estados/resultados.
