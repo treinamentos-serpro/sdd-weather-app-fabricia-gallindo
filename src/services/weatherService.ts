@@ -149,7 +149,8 @@ export async function getWeather(city: City): Promise<WeatherData> {
     temperatureMinC: daily.temperature_2m_min?.[index] ?? null,
     temperatureMaxC: daily.temperature_2m_max?.[index] ?? null,
     precipitationProbabilityPercent: daily.precipitation_probability_max?.[index] ?? null,
-    precipitationMm: daily.precipitation_sum?.[index] ?? null,
+    precipitationMm:
+      daily.precipitation_sum?.[index] === null ? 0 : (daily.precipitation_sum?.[index] ?? null),
     windSpeedMaxKmh: daily.wind_speed_10m_max?.[index] ?? null,
   }));
 
@@ -162,7 +163,7 @@ export async function getWeather(city: City): Promise<WeatherData> {
       relativeHumidityPercent: current.relative_humidity_2m ?? null,
       isDay: current.is_day == null ? null : current.is_day === 1,
       weatherCode: current.weather_code ?? null,
-      precipitationMm: current.precipitation ?? null,
+      precipitationMm: current.precipitation === null ? 0 : (current.precipitation ?? null),
       windSpeedKmh: current.wind_speed_10m ?? null,
     },
     forecast,

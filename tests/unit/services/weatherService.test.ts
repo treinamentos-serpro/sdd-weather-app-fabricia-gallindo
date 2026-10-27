@@ -236,6 +236,69 @@ describe('getWeather', () => {
     expect((await getWeather(city)).forecast.map((day) => day.date)).toEqual(dates);
   });
 
+  it('maps null precipitation values to zero for current and daily weather', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            current: { ...current, precipitation: null },
+            daily: { ...daily, precipitation_sum: [null, 1, null, 3, null] },
+          }),
+        ),
+      ),
+    );
+
+    const weather = await getWeather(city);
+
+    expect(weather.current.precipitationMm).toBe(0);
+    expect(weather.forecast.map((day) => day.precipitationMm)).toEqual([0, 1, 0, 3, 0]);
+  });
+
+  it('preserves five dates and available values when daily measurement arrays are partial', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            current: { ...current, temperature_2m: null, apparent_temperature: 0 },
+            daily: {
+              time: dates,
+              weather_code: [0, null, 61],
+              temperature_2m_min: [-2.35, null, 0],
+              temperature_2m_max: [0, 12.25],
+              precipitation_probability_max: [0, null, 100],
+              precipitation_sum: [0, 1.5],
+              wind_speed_10m_max: [0],
+            },
+          }),
+        ),
+      ),
+    );
+
+    const weather = await getWeather(city);
+
+    expect(weather.current.temperatureC).toBeNull();
+    expect(weather.current.apparentTemperatureC).toBe(0);
+    expect(weather.forecast.map((day) => day.date)).toEqual(dates);
+    expect(weather.forecast.map((day) => day.weatherCode)).toEqual([0, null, 61, null, null]);
+    expect(weather.forecast.map((day) => day.temperatureMinC)).toEqual([
+      -2.35, null, 0, null, null,
+    ]);
+    expect(weather.forecast.map((day) => day.temperatureMaxC)).toEqual([
+      0, 12.25, null, null, null,
+    ]);
+    expect(weather.forecast.map((day) => day.precipitationProbabilityPercent)).toEqual([
+      0, null, 100, null, null,
+    ]);
+    expect(weather.forecast.map((day) => day.precipitationMm)).toEqual([
+      0, 1.5, null, null, null,
+    ]);
+    expect(weather.forecast.map((day) => day.windSpeedMaxKmh)).toEqual([
+      0, null, null, null, null,
+    ]);
+  });
+
   it.each([
     null,
     {},
@@ -244,9 +307,13 @@ describe('getWeather', () => {
     { current: null, daily },
     { current, daily: null },
     { current: {}, daily },
+    { current: { ...current, time: '' }, daily },
+    { current: { ...current, time: 123 }, daily },
     { current, daily: {} },
+    { current, daily: { time: '2026-10-27' } },
     { current, daily: { time: dates.slice(0, 4) } },
     { current, daily: { time: [...dates.slice(0, 4), null] } },
+    { current, daily: { time: [...dates.slice(0, 4), ''] } },
   ])('rejects an incomplete forecast: %j', async (payload) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(payload))));
 
@@ -284,6 +351,12 @@ describe('getWeather', () => {
 });
 
 describe('searchCities', () => {
+  it('rejects invalid JSON instead of presenting it as an empty search', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not json')));
+
+    await expect(searchCities('São Paulo')).rejects.toBeInstanceOf(SyntaxError);
+  });
+
   it.each(['', '   ', '\t\n'])('returns no cities without fetching for %j', async (name) => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

@@ -1,6 +1,10 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import { useState } from 'react';
+import userEvent from '@testing-library/user-event';
 import CurrentWeather from '../../../src/components/CurrentWeather';
+import UnitToggle from '../../../src/components/UnitToggle';
 import { weatherDataMock } from '../../../src/mocks/weather';
+import type { Unit } from '../../../src/types/weather';
 
 const { city, current } = weatherDataMock;
 
@@ -9,6 +13,33 @@ function getMetric(label: string) {
 }
 
 describe('CurrentWeather', () => {
+  it('updates the displayed temperature when Fahrenheit is selected', async () => {
+    function WeatherWithUnitToggle() {
+      const [unit, setUnit] = useState<Unit>('celsius');
+
+      return (
+        <>
+          <UnitToggle unit={unit} onChange={setUnit} />
+          <CurrentWeather
+            city={city}
+            current={{ ...current, temperatureC: 0 }}
+            unit={unit}
+          />
+        </>
+      );
+    }
+
+    const user = userEvent.setup();
+    render(<WeatherWithUnitToggle />);
+
+    const weatherRegion = screen.getByRole('region', { name: 'São Paulo' });
+    expect(within(weatherRegion).getByText('0,0 °C')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '°F Fahrenheit' }));
+
+    expect(within(weatherRegion).getByText('32,0 °F')).toBeInTheDocument();
+  });
+
   it('identifies the city and displays conditions and labeled metrics', () => {
     render(<CurrentWeather city={city} current={current} unit="celsius" />);
 
